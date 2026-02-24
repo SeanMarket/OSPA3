@@ -47,23 +47,23 @@ ssize_t char_driver_read(struct file *pfile, char __user *buffer, size_t length,
 
  offset will be set to current position of the opened file after reading
  */
-  if(*offset > BUFFER_SIZE)
+  if (*offset > BUFFER_SIZE)
   {
     printk(KERN_ALERT "Read offset overflow\n");
     return -1;
   }
 
-  if(*offset == BUFFER_SIZE)
+  if (*offset == BUFFER_SIZE)
   {
     printk(KERN_ALERT "Buffer is full\n");
     return -1;
   }
 
   int remainingBytes = BUFFER_SIZE - *offset;
-  int readBytes = min(length, remainingBytes);
+  int readBytes = min((int)length, remainingBytes);
 
-  if ((copy_to_user(buffer, kbuff + *offset, readBytes)))// copy to user returns 0 on success
-  { 
+  if ((copy_to_user(buffer, kbuff + *offset, readBytes))) // copy to user returns 0 on success
+  {
     printk(KERN_ALERT "Copy Error\n");
     return -1;
   }
@@ -83,22 +83,21 @@ length is the length of the userspace buffer
 
 offset will be set to current position of the opened file
 */
-  if(*offset > BUFFER_SIZE)
+  if (*offset > BUFFER_SIZE)
   {
     printk(KERN_ALERT "Write offset overflow\n");
     return -1;
   }
 
-  if(*offset == BUFFER_SIZE)
+  if (*offset == BUFFER_SIZE)
   {
     printk(KERN_ALERT "Buffer is full\n");
     return -1;
   }
 
-
   int bytesToWrite = 0;
 
-  if(*offset + length > BUFFER_SIZE)
+  if (*offset + length > BUFFER_SIZE)
   {
     bytesToWrite = BUFFER_SIZE - *offset;
   }
@@ -107,8 +106,8 @@ offset will be set to current position of the opened file
     bytesToWrite = length;
   }
 
-  if(copy_from_user(kbuff + *offset, buffer, bytesToWrite))// copy from user returns 0 on success
-  { 
+  if (copy_from_user(kbuff + *offset, buffer, bytesToWrite)) // copy from user returns 0 on success
+  {
     printk(KERN_ALERT "Copy Error\n");
     return -1;
   }
@@ -161,6 +160,37 @@ loff_t char_driver_seek(struct file *pfile, loff_t offset, int whence)
    update the opened file's position according to the values of offset and
    whence.
    */
+
+  switch (whence)
+  {
+  case 0:
+    if (offset < 0 || offset > BUFFER_SIZE)
+    {
+      printk(KERN_ALERT "Seek offset overflow\n");
+      return -1;
+    }
+
+    pfile->f_pos = offset;
+    break;
+  case 1:
+    if (pfile->f_pos + offset < 0 || pfile->f_pos + offset > BUFFER_SIZE)
+    {
+      printk(KERN_ALERT "Seek offset overflow\n");
+      return -1;
+    }
+    pfile->f_pos += offset;
+    break;
+  case 2:
+    if (offset > BUFFER_SIZE)
+    {
+      printk(KERN_ALERT "Seek offset overflow\n");
+      return -1;
+    }
+    pfile->f_pos = BUFFER_SIZE - offset;
+    break;
+  default:
+    return -1;
+  }
   return 0;
 }
 
