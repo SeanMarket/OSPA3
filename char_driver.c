@@ -50,13 +50,14 @@ ssize_t char_driver_read(struct file *pfile, char __user *buffer, size_t length,
   if (*offset > BUFFER_SIZE)
   {
     printk(KERN_ALERT "Read offset overflow\n");
+    printk(KERN_ALERT "Offset: %d\n", (int)*offset);
     return -1;
   }
 
   if (*offset == BUFFER_SIZE)
   {
-    printk(KERN_ALERT "Buffer is full\n");
-    return -1;
+    printk(KERN_ALERT "End of Buffer\n");
+    return 0;
   }
 
   int remainingBytes = BUFFER_SIZE - *offset;
@@ -68,7 +69,7 @@ ssize_t char_driver_read(struct file *pfile, char __user *buffer, size_t length,
     return -1;
   }
   *offset += readBytes;
-  printk(KERN_ALERT "Read %d bytes", readBytes);
+  printk(KERN_ALERT "Read %d bytes\n", readBytes);
   return readBytes;
 }
 
@@ -91,7 +92,7 @@ offset will be set to current position of the opened file
 
   if (*offset == BUFFER_SIZE)
   {
-    printk(KERN_ALERT "Buffer is full\n");
+    printk(KERN_ALERT "End of Buffer\n");
     return -1;
   }
 
@@ -164,34 +165,50 @@ loff_t char_driver_seek(struct file *pfile, loff_t offset, int whence)
   switch (whence)
   {
   case 0:
-    if (offset < 0 || offset > BUFFER_SIZE)
+    if (offset < 0)
     {
-      printk(KERN_ALERT "Seek offset overflow\n");
-      return -1;
+      printk(KERN_ALERT "Seek offset underflow (case 0)\n");
+      offset = 0;
+    }
+    if (offset > BUFFER_SIZE)
+    {
+      printk(KERN_ALERT "Seek offset overflow (case 0)\n");
+      offset = BUFFER_SIZE;
     }
 
     pfile->f_pos = offset;
     break;
   case 1:
-    if (pfile->f_pos + offset < 0 || pfile->f_pos + offset > BUFFER_SIZE)
+    if (pfile->f_pos + offset < 0)
     {
-      printk(KERN_ALERT "Seek offset overflow\n");
-      return -1;
+      printk(KERN_ALERT "Seek offset underflow (case 1)\n");
+      offset = 0;
+    }
+    if(pfile->f_pos + offset > BUFFER_SIZE)
+    {
+      printk(KERN_ALERT "Seek offset overflow (case 1)\n");
+      offset = BUFFER_SIZE;
     }
     pfile->f_pos += offset;
     break;
   case 2:
-    if (offset > BUFFER_SIZE)
+    if (BUFFER_SIZE + offset < 0)
     {
-      printk(KERN_ALERT "Seek offset overflow\n");
-      return -1;
+      printk(KERN_ALERT "Seek offset underflow\n");
+      offset = 0;
     }
-    pfile->f_pos = BUFFER_SIZE - offset;
+    if(BUFFER_SIZE + offset > BUFFER_SIZE)
+    {
+      printk(KERN_ALERT "Seek offset overflow (case 2)\n");
+      offset = BUFFER_SIZE;
+    }
+    pfile->f_pos = BUFFER_SIZE + offset; //offset is negative when seeking at the end?
     break;
   default:
+    printk(KERN_ALERT "Invalid whence value\n");
     return -1;
   }
-  return 0;
+  return pfile->f_pos;
 }
 
 static int char_driver_init(void)
@@ -202,8 +219,19 @@ static int char_driver_init(void)
    been called.
    */
 
-  register_chrdev(511, DEVICE_NAME, &char_driver_file_operations);
+  int ret = register_chrdev(511, DEVICE_NAME, &char_driver_file_operations);
+  if (ret < 0) {
+    printk(KERN_ALERT "char_driver: failed to register device\n");
+    return ret;
+  }
+  
   kbuff = (char *)kmalloc(BUFFER_SIZE, GFP_KERNEL);
+  if (!kbuff) {
+    unregister_chrdev(511, DEVICE_NAME);
+    printk(KERN_ALERT "char_driver: failed to allocate memory\n");
+    return -ENOMEM;
+  }
+  
   printk(KERN_ALERT "char_driver initialized\n");
   return 0;
 }
